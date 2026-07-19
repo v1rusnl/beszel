@@ -51,6 +51,23 @@ func (am *AlertManager) HandleSystemAlerts(systemRecord *core.Record, data *syst
 			}
 			val = data.Info.DashboardTemp
 			unit = "°C"
+		case "DiskTemperature":
+			// Skip if no S.M.A.R.T devices with temperature data
+			if len(data.Stats.SmartTemperatures) == 0 {
+				continue
+			}
+			// Get the highest temperature from all disks
+			var maxTemp float32 = 0
+			for _, temp := range data.Stats.SmartTemperatures {
+				if temp > maxTemp {
+					maxTemp = temp
+				}
+			}
+			if maxTemp < 1 {
+				continue
+			}
+			val = float64(maxTemp)
+			unit = "°C"
 		case "LoadAvg1":
 			val = data.Info.LoadAvg[0]
 			unit = ""
@@ -217,6 +234,16 @@ func (am *AlertManager) HandleSystemAlerts(systemRecord *core.Record, data *syst
 					}
 					alert.mapSums[key] += temp
 				}
+			case "DiskTemperature":
+				if alert.mapSums == nil {
+					alert.mapSums = make(map[string]float32, len(stats.SmartTemperatures))
+				}
+				for key, temp := range stats.SmartTemperatures {
+					if _, ok := alert.mapSums[key]; !ok {
+						alert.mapSums[key] = float32(0)
+					}
+					alert.mapSums[key] += temp
+				}
 			case "LoadAvg1":
 				alert.val += stats.LoadAvg[0]
 			case "LoadAvg5":
@@ -265,6 +292,16 @@ func (am *AlertManager) HandleSystemAlerts(systemRecord *core.Record, data *syst
 				}
 			}
 			alert.val = float64(maxTemp)
+		case "DiskTemperature":
+			maxDiskTemp := float32(0)
+			for key, value := range alert.mapSums {
+				sumDiskTemp := float32(value) / float32(alert.count)
+				if sumDiskTemp > maxDiskTemp {
+					maxDiskTemp = sumDiskTemp
+					alert.descriptor = fmt.Sprintf("Highest disk %s", key)
+				}
+			}
+			alert.val = float64(maxDiskTemp)
 		default:
 			alert.val = alert.val / float64(alert.count)
 		}
