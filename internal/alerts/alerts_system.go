@@ -52,22 +52,9 @@ func (am *AlertManager) HandleSystemAlerts(systemRecord *core.Record, data *syst
 			val = data.Info.DashboardTemp
 			unit = "°C"
 		case "DiskTemperature":
-			// Skip if no S.M.A.R.T devices - handle gracefully
-			if data.Smart == nil || len(data.Smart.SmartDataMap) == 0 {
-				continue
-			}
-			// Get the highest temperature from all disks
-			var maxTemp float32 = 0
-			for _, device := range data.Smart.SmartDataMap {
-				if device.Temperature > maxTemp {
-					maxTemp = device.Temperature
-				}
-			}
-			if maxTemp < 1 {
-				continue
-			}
-			val = float64(maxTemp)
-			unit = "°C"
+			// S.M.A.R.T data is not available in CombinedData, skip this alert type
+			// S.M.A.R.T data is fetched separately and would need a dedicated alert handler
+			continue
 		case "LoadAvg1":
 			val = data.Info.LoadAvg[0]
 			unit = ""
@@ -234,10 +221,6 @@ func (am *AlertManager) HandleSystemAlerts(systemRecord *core.Record, data *syst
 					}
 					alert.mapSums[key] += temp
 				}
-			case "DiskTemperature":
-				// S.M.A.R.T temperature data is not persisted in stats,
-				// so we skip the historical averaging for disk temperature alerts
-				continue
 			case "LoadAvg1":
 				alert.val += stats.LoadAvg[0]
 			case "LoadAvg5":
@@ -286,13 +269,6 @@ func (am *AlertManager) HandleSystemAlerts(systemRecord *core.Record, data *syst
 				}
 			}
 			alert.val = float64(maxTemp)
-		case "DiskTemperature":
-			// S.M.A.R.T data is not persisted in historical stats, use current value only
-			if alert.count == 0 {
-				alert.count = 1
-			} else {
-				alert.val = alert.val / float64(alert.count)
-			}
 		default:
 			alert.val = alert.val / float64(alert.count)
 		}
